@@ -1,0 +1,7 @@
+Step 1 : Influencer Discovery
+1)
+Generate seed words / hashtags to find influencers for 
+a particular niche.
+2) Youtube Data API ->channelID, channelTitle, description
+3) Instagram Creators -> usernames
+
