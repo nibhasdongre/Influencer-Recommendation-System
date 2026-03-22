@@ -1,40 +1,97 @@
 import csv
 from googleapiclient.discovery import build
 
-# 1. Setup API
+# Setup API
 api_key = ""
-youtube = build('youtube', 'v3', developerKey=api_key)
+youtube = build("youtube", "v3", developerKey=api_key)
 
-# 2. Read Keywords from the .txt file
+# Load keywords
 def load_keywords(file_path):
-    with open(file_path, 'r', encoding='utf-8') as f:
+    with open(file_path, "r", encoding="utf-8") as f:
         return [line.strip() for line in f if line.strip()]
 
-keywords = load_keywords("/fitness-keywords.txt")
+keywords = load_keywords("/content/fitness-keywords.txt")
 
-# 3. Define the CSV output
 output_file = "youtube_creators.csv"
-headers = ["Keyword", "Channel ID", "Channel Title","PublishedAt","Thumbnail URL",
+
+headers = [
+    "Channel ID",
+    "Channel Title",
+    "Published At",
+    "Thumbnail URL",
     "Language",
+    "Country",
     "Subscriber Count",
-    "Video Count"]
+    "Video Count"
+]
 
-print(f"Reading {len(keywords)} keywords. Saving results to {output_file}...")
+print(f"Loaded {len(keywords)} keywords")
 
-# 4. Open CSV and execute search
-with open(output_file, mode='w', newline='', encoding='utf-8') as file:
+# Step 1 — Collect channel IDs
+channel_ids = set()
+
+for keyword in keywords:
+    print("Searching:", keyword)
+
+    try:
+        request = youtube.search().list(
+            q=keyword,
+            part="snippet",
+            type="video",
+            maxResults=50
+        )
+
+        response = request.execute()
+
+        for item in response.get("items", []):
+            channel_ids.add(item["snippet"]["channelId"])
+
+    except Exception as e:
+        print("Error:", e)
+
+print(f"Collected {len(channel_ids)} unique channels")
+
+# Step 2 — Fetch channel details in batches
+def chunk_list(lst, size):
+    for i in range(0, len(lst), size):
+        yield lst[i:i + size]
+
+channel_ids = list(channel_ids)
+
+with open(output_file, "w", newline="", encoding="utf-8") as file:
     writer = csv.writer(file)
     writer.writerow(headers)
 
-    for keyword in keywords:
-        print(f"Searching: {keyword}")
+    for batch in chunk_list(channel_ids, 50):
 
         try:
-            request = youtube.search().list(
-                q=keyword,
-                part="snippet",
-                type="video",
-                maxResults=10
+            request = youtube.channels().list(
+                part="snippet,statistics",
+                id=",".join(batch)
+            )
+
+            response = request.execute()
+
+            for item in response.get("items", []):
+
+                snippet = item["snippet"]
+                stats = item.get("statistics", {})
+
+                writer.writerow([
+                    item["id"],
+                    snippet.get("title", ""),
+                    snippet.get("publishedAt", ""),
+                    snippet.get("thumbnails", {}).get("default", {}).get("url", ""),
+                    snippet.get("defaultLanguage", ""),
+                    snippet.get("country",""),
+                    stats.get("subscriberCount", ""),
+                    stats.get("videoCount", "")
+                ])
+
+        except Exception as e:
+            print("Batch error:", e)
+
+print("Extraction complete!")                maxResults=10
             )
             response = request.execute()
 
