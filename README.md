@@ -1,15 +1,13 @@
 # Influencer-Recommendation-System
 
 📂 Repository Structure
-├── data/
-│   ├── youtube/          # Raw YouTube data
-│   ├── instagram/        # Raw Instagram data
-│
-├── data-scraping/
-│   ├── youtube/          # Scripts for YouTube Data API extraction
-│   ├── instagram/        # Script used to extract Instagram using Apify Client
-│
-├── README.md
+--data/
+  -youtube/          # Raw YouTube data
+  -instagram/        # Raw Instagram data
+--data-scraping/
+  -youtube/          # Scripts for YouTube Data API extraction
+  -instagram/        # Script used to extract Instagram using Apify Client
+--README.md
 
 ⚙️ Data Description
 
