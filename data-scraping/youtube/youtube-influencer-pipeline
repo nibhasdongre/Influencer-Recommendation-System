@@ -1,0 +1,511 @@
+import os
+import sqlite3
+import time
+import logging
+from datetime import datetime, timedelta
+from typing import List, Dict, Set, Optional, Tuple
+import requests
+from googleapiclient.discovery import build
+from googleapiclient.errors import HttpError
+import json
+from dataclasses import dataclass
+from collections import defaultdict, Counter
+import asyncio
+import aiohttp
+from concurrent.futures import ThreadPoolExecutor
+import hashlib
+
+# Configure logging
+logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
+logger = logging.getLogger(__name__)
+
+@dataclass
+class Config:
+    API_KEY: str = "YOUR_YOUTUBE_API_KEY"  # Replace with your API key
+    MAX_CREATORS: int = 5000
+    VIDEOS_PER_CREATOR: int = 20
+    BATCH_SIZE: int = 50
+    REQUEST_DELAY: float = 0.1  # Rate limiting
+    SEED_CHANNELS: List[str] = None
+    DB_PATH: str = "youtube_influencers.db"
+
+class YouTubeInfluencerPipeline:
+    def __init__(self, config: Config):
+        self.config = config
+        self.youtube = build('youtube', 'v3', developerKey=config.API_KEY)
+        self.conn = sqlite3.connect(config.DB_PATH, check_same_thread=False)
+        self.creators_seen = set()
+        self.collab_scores = defaultdict(int)
+        self.audience_similarity = defaultdict(float)
+        self.init_database()
+        
+        # Default seed channels (top tech/gaming influencers)
+        if config.SEED_CHANNELS is None:
+            self.config.SEED_CHANNELS = [
+                'UC-lHJZR3Gqxm24_Vd_AJ5Yw',  # PewDiePie
+                'UCX6OQ3DkcsbYNE6H8uQQuVA',  # T-Series
+                'UCBJycsmduvYEL83R_U4JriQ',  # MrBeast
+                'UCq-Fj5jknLsUf-MWSy4_brA',  # Like Nastya
+                'UCYfdidRxbB8Qhf0Nx7KrPnw'   # WWE
+            ]
+
+    def init_database(self):
+        """Initialize database schema with indexes for optimal performance"""
+        cursor = self.conn.cursor()
+        
+        # Creators table
+        cursor.execute('''
+            CREATE TABLE IF NOT EXISTS Creators (
+                channel_id TEXT PRIMARY KEY,
+                channel_title TEXT,
+                published_at TEXT,
+                thumbnail_url TEXT,
+                language TEXT,
+                country TEXT,
+                subscriber_count INTEGER,
+                video_count INTEGER,
+                discovered_at TEXT DEFAULT CURRENT_TIMESTAMP,
+                depth INTEGER DEFAULT 0
+            )
+        ''')
+        
+        # Videos table
+        cursor.execute('''
+            CREATE TABLE IF NOT EXISTS Videos (
+                video_id TEXT PRIMARY KEY,
+                channel_id TEXT,
+                title TEXT,
+                description TEXT,
+                tags TEXT,
+                language TEXT,
+                published_at TEXT,
+                FOREIGN KEY(channel_id) REFERENCES Creators(channel_id)
+            )
+        ''')
+        
+        # Metrics table
+        cursor.execute('''
+            CREATE TABLE IF NOT EXISTS Metrics (
+                video_id TEXT,
+                collected_at TEXT,
+                views INTEGER,
+                likes INTEGER,
+                comment_count INTEGER,
+                PRIMARY KEY(video_id, collected_at),
+                FOREIGN KEY(video_id) REFERENCES Videos(video_id)
+            )
+        ''')
+        
+        # Assets table
+        cursor.execute('''
+            CREATE TABLE IF NOT EXISTS Assets (
+                video_id TEXT PRIMARY KEY,
+                thumbnail_url TEXT,
+                description TEXT,
+                audio_path TEXT,
+                FOREIGN KEY(video_id) REFERENCES Videos(video_id)
+            )
+        ''')
+        
+        # Create indexes for optimal query performance
+        indexes = [
+            "CREATE INDEX IF NOT EXISTS idx_videos_channel ON Videos(channel_id)",
+            "CREATE INDEX IF NOT EXISTS idx_metrics_video ON Metrics(video_id)",
+            "CREATE INDEX IF NOT EXISTS idx_creators_subscribers ON Creators(subscriber_count)",
+            "CREATE INDEX IF NOT EXISTS idx_creators_depth ON Creators(depth)"
+        ]
+        
+        for idx in indexes:
+            cursor.execute(idx)
+            
+        self.conn.commit()
+        logger.info("Database initialized successfully")
+
+    def get_channel_details(self, channel_id: str) -> Optional[Dict]:
+        """Fetch comprehensive channel details"""
+        try:
+            response = self.youtube.channels().list(
+                part='snippet,contentDetails,statistics,status',
+                id=channel_id
+            ).execute()
+            
+            if not response['items']:
+                return None
+                
+            item = response['items'][0]
+            snippet = item['snippet']
+            stats = item['statistics']
+            
+            return {
+                'channel_id': channel_id,
+                'channel_title': snippet['title'],
+                'published_at': snippet['publishedAt'],
+                'thumbnail_url': snippet['thumbnails']['high']['url'],
+                'language': snippet.get('defaultLanguage', ''),
+                'country': snippet.get('country', ''),
+                'subscriber_count': int(stats.get('subscriberCount', 0)),
+                'video_count': int(stats.get('videoCount', 0))
+            }
+        except HttpError as e:
+            logger.warning(f"Failed to fetch channel {channel_id}: {e}")
+            return None
+
+    def get_related_channels(self, channel_id: str) -> List[str]:
+        """Get related channels efficiently"""
+        try:
+            response = self.youtube.channels().list(
+                part='id,snippet',
+                id=channel_id
+            ).execute()
+            
+            if not response['items']:
+                return []
+                
+            # Use search API for better related channels
+            search_response = self.youtube.search().list(
+                part='id,snippet',
+                channelId=channel_id,
+                type='channel',
+                maxResults=50
+            ).execute()
+            
+            related = []
+            for item in search_response.get('items', []):
+                if item['id']['channelId'] != channel_id:
+                    related.append(item['id']['channelId'])
+            
+            return related[:20]  # Limit to top 20
+        except HttpError:
+            return []
+
+    def get_latest_videos(self, channel_id: str, max_results: int = 20) -> List[Dict]:
+        """Fetch latest videos with metadata efficiently"""
+        try:
+            # Get uploads playlist
+            playlist_response = self.youtube.channels().list(
+                part='contentDetails',
+                id=channel_id
+            ).execute()
+            
+            if not playlist_response['items']:
+                return []
+                
+            uploads_id = playlist_response['items'][0]['contentDetails']['relatedPlaylists']['uploads']
+            
+            # Get videos from playlist
+            videos = []
+            next_page = None
+            
+            while len(videos) < max_results:
+                playlist_items = self.youtube.playlistItems().list(
+                    part='snippet,contentDetails',
+                    playlistId=uploads_id,
+                    maxResults=min(50, max_results - len(videos)),
+                    pageToken=next_page
+                ).execute()
+                
+                for item in playlist_items['items']:
+                    video_info = {
+                        'video_id': item['contentDetails']['videoId'],
+                        'channel_id': channel_id,
+                        'title': item['snippet']['title'],
+                        'description': item['snippet']['description'][:500],  # Truncate
+                        'published_at': item['snippet']['publishedAt'],
+                        'thumbnail_url': item['snippet']['thumbnails']['high']['url']
+                    }
+                    videos.append(video_info)
+                
+                next_page = playlist_items.get('nextPageToken')
+                if not next_page:
+                    break
+                    
+                time.sleep(self.config.REQUEST_DELAY)
+            
+            return videos[:max_results]
+        except HttpError as e:
+            logger.warning(f"Failed to fetch videos for {channel_id}: {e}")
+            return []
+
+    def get_video_details_batch(self, video_ids: List[str]) -> Dict[str, Dict]:
+        """Batch fetch video details for efficiency"""
+        if not video_ids:
+            return {}
+            
+        try:
+            response = self.youtube.videos().list(
+                part='snippet,statistics,contentDetails',
+                id=','.join(video_ids)
+            ).execute()
+            
+            video_details = {}
+            for item in response.get('items', []):
+                video_id = item['id']
+                snippet = item['snippet']
+                stats = item.get('statistics', {})
+                
+                video_details[video_id] = {
+                    'title': snippet['title'],
+                    'description': snippet['description'][:1000],
+                    'tags': json.dumps(snippet.get('tags', [])),
+                    'language': snippet.get('defaultAudioLanguage', ''),
+                    'published_at': snippet['publishedAt'],
+                    'views': int(stats.get('viewCount', 0)),
+                    'likes': int(stats.get('likeCount', 0)),
+                    'comment_count': int(stats.get('commentCount', 0)),
+                    'thumbnail_url': snippet['thumbnails']['high']['url']
+                }
+            
+            return video_details
+        except HttpError as e:
+            logger.warning(f"Failed to fetch video details: {e}")
+            return {}
+
+    def score_creator(self, channel_id: str, depth: int, parent_channels: List[str]) -> float:
+        """Score creators based on collaboration frequency and depth"""
+        base_score = 1.0 / (depth + 1)  # Prefer closer connections
+        collab_boost = len(set(parent_channels) & set(self.creators_seen)) * 0.1
+        return base_score + collab_boost
+
+    def discover_creators(self) -> List[str]:
+        """Network-based creator discovery with scoring"""
+        queue = [(cid, 0, [cid]) for cid in self.config.SEED_CHANNELS]  # (channel_id, depth, parents)
+        discovered = set(self.config.SEED_CHANNELS)
+        
+        while len(discovered) < self.config.MAX_CREATORS and queue:
+            channel_id, depth, parents = queue.pop(0)
+            
+            if channel_id in self.creators_seen:
+                continue
+                
+            self.creators_seen.add(channel_id)
+            
+            # Get related channels
+            related = self.get_related_channels(channel_id)
+            score = self.score_creator(channel_id, depth, parents)
+            self.collab_scores[channel_id] = score
+            
+            for related_id in related:
+                if related_id not in discovered and len(discovered) < self.config.MAX_CREATORS:
+                    discovered.add(related_id)
+                    queue.append((related_id, depth + 1, parents + [channel_id]))
+                
+                time.sleep(self.config.REQUEST_DELAY)
+        
+        logger.info(f"Discovered {len(discovered)} creators")
+        return list(discovered)
+
+    def populate_database(self, channel_ids: List[str]):
+        """Efficiently populate all tables"""
+        cursor = self.conn.cursor()
+        batch_size = self.config.BATCH_SIZE
+        
+        # 1. Process creators in batches
+        for i in range(0, len(channel_ids), batch_size):
+            batch = channel_ids[i:i+batch_size]
+            logger.info(f"Processing creators batch {i//batch_size + 1}/{(len(channel_ids)-1)//batch_size + 1}")
+            
+            for channel_id in batch:
+                details = self.get_channel_details(channel_id)
+                if details:
+                    cursor.execute('''
+                        INSERT OR REPLACE INTO Creators 
+                        (channel_id, channel_title, published_at, thumbnail_url, 
+                         language, country, subscriber_count, video_count)
+                        VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+                    ''', (
+                        details['channel_id'], details['channel_title'], details['published_at'],
+                        details['thumbnail_url'], details['language'], details['country'],
+                        details['subscriber_count'], details['video_count']
+                    ))
+            
+            self.conn.commit()
+            time.sleep(self.config.REQUEST_DELAY * 2)
+        
+        # 2. Get all videos and batch process
+        all_videos = []
+        for i, channel_id in enumerate(channel_ids):
+            videos = self.get_latest_videos(channel_id, self.config.VIDEOS_PER_CREATOR)
+            for video in videos:
+                video['channel_id'] = channel_id
+                all_videos.append(video)
+            
+            if i % 10 == 0:
+                logger.info(f"Fetched videos for {i+1}/{len(channel_ids)} creators")
+            time.sleep(self.config.REQUEST_DELAY)
+        
+        # 3. Batch process video details
+        video_ids = [v['video_id'] for v in all_videos]
+        video_details = {}
+        
+        for i in range(0, len(video_ids), 50):
+            batch_ids = video_ids[i:i+50]
+            batch_details = self.get_video_details_batch(batch_ids)
+            video_details.update(batch_details)
+            time.sleep(self.config.REQUEST_DELAY)
+        
+        # 4. Insert videos, metrics, and assets
+        cursor.executemany('''
+            INSERT OR IGNORE INTO Videos 
+            (video_id, channel_id, title, description, tags, language, published_at)
+            VALUES (?, ?, ?, ?, ?, ?, ?)
+        ''', [
+            (
+                v['video_id'],
+                v['channel_id'],
+                video_details.get(v['video_id'], {}).get('title', v['title']),
+                video_details.get(v['video_id'], {}).get('description', v['description']),
+                video_details.get(v['video_id'], {}).get('tags', '[]'),
+                video_details.get(v['video_id'], {}).get('language', ''),
+                v.get('published_at', '')
+            )
+            for v in all_videos
+        ])
+        
+        # Insert metrics
+        now = datetime.now().isoformat()
+        metrics_data = []
+        for video_id, details in video_details.items():
+            metrics_data.append((
+                video_id, now,
+                details.get('views', 0),
+                details.get('likes', 0),
+                details.get('comment_count', 0)
+            ))
+        
+        cursor.executemany('''
+            INSERT INTO Metrics (video_id, collected_at, views, likes, comment_count)
+            VALUES (?, ?, ?, ?, ?)
+        ''', metrics_data)
+        
+        # Insert assets
+        assets_data = []
+        for video_id, details in video_details.items():
+            assets_data.append((
+                video_id,
+                details.get('thumbnail_url', ''),
+                details.get('description', '')[:500],
+                f"audio/{video_id}.mp3"  # Placeholder
+            ))
+        
+        cursor.executemany('''
+            INSERT OR REPLACE INTO Assets 
+            (video_id, thumbnail_url, description, audio_path)
+            VALUES (?, ?, ?, ?)
+        ''', assets_data)
+        
+        self.conn.commit()
+        logger.info("Database population completed")
+
+    def get_stats(self) -> Dict:
+        """Get comprehensive database statistics"""
+        cursor = self.conn.cursor()
+        
+        stats = {}
+        
+        # Creators stats
+        cursor.execute("SELECT COUNT(*) FROM Creators")
+        stats['creators_total'] = cursor.fetchone()[0]
+        
+        cursor.execute("SELECT * FROM Creators LIMIT 1")
+        if cursor.fetchone():
+            columns = [desc[0] for desc in cursor.description]
+            null_counts = {}
+            for col in columns:
+                cursor.execute(f"SELECT COUNT(*) FROM Creators WHERE {col} IS NULL")
+                null_counts[col] = cursor.fetchone()[0]
+            stats['creators_nulls'] = null_counts
+        
+        # Videos stats
+        cursor.execute("SELECT COUNT(*) FROM Videos")
+        stats['videos_total'] = cursor.fetchone()[0]
+        
+        cursor.execute("SELECT * FROM Videos LIMIT 1")
+        if cursor.fetchone():
+            columns = [desc[0] for desc in cursor.description]
+            null_counts = {}
+            for col in columns:
+                cursor.execute(f"SELECT COUNT(*) FROM Videos WHERE {col} IS NULL")
+                null_counts[col] = cursor.fetchone()[0]
+            stats['videos_nulls'] = null_counts
+        
+        # Metrics stats
+        cursor.execute("SELECT COUNT(*) FROM Metrics")
+        stats['metrics_total'] = cursor.fetchone()[0]
+        
+        cursor.execute("SELECT * FROM Metrics LIMIT 1")
+        if cursor.fetchone():
+            columns = [desc[0] for desc in cursor.description]
+            null_counts = {}
+            for col in columns:
+                cursor.execute(f"SELECT COUNT(*) FROM Metrics WHERE {col} IS NULL")
+                null_counts[col] = cursor.fetchone()[0]
+            stats['metrics_nulls'] = null_counts
+        
+        # Assets stats
+        cursor.execute("SELECT COUNT(*) FROM Assets")
+        stats['assets_total'] = cursor.fetchone()[0]
+        
+        cursor.execute("SELECT * FROM Assets LIMIT 1")
+        if cursor.fetchone():
+            columns = [desc[0] for desc in cursor.description]
+            null_counts = {}
+            for col in columns:
+                cursor.execute(f"SELECT COUNT(*) FROM Assets WHERE {col} IS NULL")
+                null_counts[col] = cursor.fetchone()[0]
+            stats['assets_nulls'] = null_counts
+        
+        return stats
+
+    def run_pipeline(self):
+        """Main pipeline execution"""
+        logger.info("Starting YouTube Influencer Discovery Pipeline")
+        
+        # Step 1: Discover creators
+        channel_ids = self.discover_creators()
+        
+        # Step 2: Populate database
+        self.populate_database(channel_ids)
+        
+        # Step 3: Print statistics
+        stats = self.get_stats()
+        print("\n" + "="*60)
+        print("DATABASE STATISTICS")
+        print("="*60)
+        print(f"Creators: {stats['creators_total']} total rows")
+        if 'creators_nulls' in stats:
+            print("Creators null counts:", {k: v for k, v in stats['creators_nulls'].items() if v > 0})
+        
+        print(f"Videos: {stats['videos_total']} total rows")
+        if 'videos_nulls' in stats:
+            print("Videos null counts:", {k: v for k, v in stats['videos_nulls'].items() if v > 0})
+        
+        print(f"Metrics: {stats['metrics_total']} total rows")
+        if 'metrics_nulls' in stats:
+            print("Metrics null counts:", {k: v for k, v in stats['metrics_nulls'].items() if v > 0})
+        
+        print(f"Assets: {stats['assets_total']} total rows")
+        if 'assets_nulls' in stats:
+            print("Assets null counts:", {k: v for k, v in stats['assets_nulls'].items() if v > 0})
+        
+        print("="*60)
+        logger.info("Pipeline completed successfully")
+
+    def close(self):
+        """Cleanup"""
+        self.conn.close()
+
+def main():
+    config = Config(
+        API_KEY="YOUR_YOUTUBE_API_KEY",  # ⚠️ REPLACE WITH YOUR API KEY
+        MAX_CREATORS=5000,
+        VIDEOS_PER_CREATOR=20
+    )
+    
+    pipeline = YouTubeInfluencerPipeline(config)
+    try:
+        pipeline.run_pipeline()
+    finally:
+        pipeline.close()
+
+if __name__ == "__main__":
+    main()
