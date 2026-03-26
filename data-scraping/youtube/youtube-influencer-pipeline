@@ -1,3 +1,6 @@
+response = youtube.channels().list(part='id', forUsername='MrBeast').execute()
+channel_id = response['items'][0]['id']
+*****************
 import os
 import sqlite3
 import time
