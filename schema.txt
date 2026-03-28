@@ -1,0 +1,22 @@
+Instagram Dataset
+Creators
+account_id, username, bio, followers, posts, verified
+Posts
+post_id, account_id, type, hashtags
+Metrics
+post_id, likes, views, comments, timestamp, shares
+Assets
+post_id, type, media_URL, thumbnail_URL, caption, audio_path
+
+
+YouTube Dataset
+
+Creators
+channel_ID, channelTitle, publishedAt, thumbnailURL, language, country, subscriberCount, videoCount
+Videos
+video_id, channel_id, title, description, tags, language
+Metrics
+video_id, collected_at, views, likes, comment_count
+Assets
+video_id, thumbnail_URL, description, audio_path
+
