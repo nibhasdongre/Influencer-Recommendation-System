@@ -1,0 +1,287 @@
+
+<style>
+*{box-sizing:border-box;margin:0;padding:0}
+body{font-family:var(--font-sans)}
+.wrap{padding:1rem 0}
+.filters{display:flex;flex-wrap:wrap;gap:8px;margin-bottom:1.25rem}
+.fbtn{font-size:12px;padding:4px 12px;border-radius:20px;border:0.5px solid var(--color-border-secondary);background:transparent;color:var(--color-text-secondary);cursor:pointer;transition:all .15s}
+.fbtn.active{background:var(--color-background-info);color:var(--color-text-info);border-color:var(--color-border-info)}
+.matrix{width:100%;border-collapse:collapse;font-size:12px;margin-bottom:1.5rem}
+.matrix th{font-weight:500;font-size:11px;color:var(--color-text-secondary);padding:6px 8px;text-align:center;border-bottom:0.5px solid var(--color-border-tertiary);white-space:nowrap}
+.matrix th.left{text-align:left}
+.matrix td{padding:6px 8px;border-bottom:0.5px solid var(--color-border-tertiary);vertical-align:middle}
+.matrix td.pid{font-weight:500;font-size:11px;color:var(--color-text-secondary);white-space:nowrap}
+.matrix td.title{font-size:12px;color:var(--color-text-primary);max-width:160px}
+.matrix tr{cursor:pointer;transition:background .1s}
+.matrix tr:hover td{background:var(--color-background-secondary)}
+.matrix tr.selected td{background:var(--color-background-info)}
+.pill{display:inline-block;padding:2px 8px;border-radius:10px;font-size:11px;font-weight:500;white-space:nowrap}
+.pill-yes{background:#E1F5EE;color:#085041}
+.pill-partial{background:#FAEEDA;color:#633806}
+.pill-no{background:#F1EFE8;color:#5F5E5A}
+.pill-novel{background:#EEEDFE;color:#3C3489}
+.pill-used{background:#E1F5EE;color:#085041}
+.detail{border:0.5px solid var(--color-border-tertiary);border-radius:var(--border-radius-lg);padding:1rem 1.25rem;background:var(--color-background-primary);display:none}
+.detail.show{display:block}
+.detail-header{display:flex;align-items:flex-start;justify-content:space-between;gap:12px;margin-bottom:12px}
+.detail-title{font-size:14px;font-weight:500;color:var(--color-text-primary);line-height:1.4}
+.detail-meta{font-size:12px;color:var(--color-text-secondary);margin-top:4px}
+.detail-grid{display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:12px}
+.detail-block{background:var(--color-background-secondary);border-radius:var(--border-radius-md);padding:10px 12px}
+.detail-block-label{font-size:11px;font-weight:500;color:var(--color-text-secondary);text-transform:uppercase;letter-spacing:.04em;margin-bottom:4px}
+.detail-block-text{font-size:13px;color:var(--color-text-primary);line-height:1.5}
+.diff-row{display:flex;gap:8px;align-items:flex-start;margin-bottom:6px}
+.diff-icon{width:18px;height:18px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:10px;flex-shrink:0;margin-top:1px}
+.diff-icon.learn{background:#E1F5EE;color:#085041}
+.diff-icon.diff{background:#EEEDFE;color:#3C3489}
+.diff-text{font-size:13px;color:var(--color-text-primary);line-height:1.5}
+.close-btn{font-size:12px;padding:3px 10px;border-radius:var(--border-radius-md);border:0.5px solid var(--color-border-secondary);background:transparent;color:var(--color-text-secondary);cursor:pointer;flex-shrink:0}
+.hint{font-size:12px;color:var(--color-text-tertiary);margin-bottom:10px}
+.dim{opacity:.35}
+</style>
+
+<div class="wrap">
+<div class="filters" id="filters">
+  <button class="fbtn active" data-cat="all">All 15</button>
+  <button class="fbtn" data-cat="GNN">GNN</button>
+  <button class="fbtn" data-cat="Multimodal">Multimodal</button>
+  <button class="fbtn" data-cat="Anomaly">Anomaly detection</button>
+  <button class="fbtn" data-cat="Retrieval">Vector retrieval</button>
+  <button class="fbtn" data-cat="Evaluation">Evaluation</button>
+  <button class="fbtn" data-cat="Context">Market context</button>
+</div>
+
+<p class="hint">Click any row to see what we learn and how TrustRank-Inf differs.</p>
+
+<table class="matrix" id="matrix">
+<thead>
+<tr>
+  <th class="left">Paper</th>
+  <th class="left">Title</th>
+  <th>GNN trust</th>
+  <th>Multimodal</th>
+  <th>Anomaly</th>
+  <th>FAISS</th>
+  <th>Cross-platform</th>
+  <th>End-to-end</th>
+</tr>
+</thead>
+<tbody id="tbody"></tbody>
+</table>
+
+<div class="detail" id="detail">
+  <div class="detail-header">
+    <div>
+      <div class="detail-title" id="d-title"></div>
+      <div class="detail-meta" id="d-meta"></div>
+    </div>
+    <button class="close-btn" onclick="closeDetail()">close</button>
+  </div>
+  <div class="detail-grid">
+    <div class="detail-block">
+      <div class="detail-block-label">What we learn</div>
+      <div class="detail-block-text" id="d-learn"></div>
+    </div>
+    <div class="detail-block">
+      <div class="detail-block-label">How TrustRank-Inf differs</div>
+      <div class="detail-block-text" id="d-diff"></div>
+    </div>
+  </div>
+  <div style="margin-top:4px">
+    <div class="detail-block-label" style="margin-bottom:6px;font-size:11px;font-weight:500;color:var(--color-text-secondary);text-transform:uppercase;letter-spacing:.04em">Coverage summary</div>
+    <div id="d-pills" style="display:flex;flex-wrap:wrap;gap:6px"></div>
+  </div>
+</div>
+</div>
+
+<script>
+const DIMS = ["GNN trust","Multimodal","Anomaly","FAISS","Cross-platform","End-to-end"];
+const papers = [
+  {
+    id:"P1", cat:"GNN",
+    title:"INFLECT-DGNN: Influencer Prediction with Dynamic GNNs",
+    meta:"Tiukhova et al. — IEEE Access, 2024",
+    scores:["partial","no","no","no","no","no"],
+    learn:"Dynamic GNNs with temporal encoding (GRU/LSTM) outperform static graph approaches for influencer prediction. Rolling-window strategy prevents data leakage in time-series graph tasks.",
+    diff:"INFLECT-DGNN targets profit-driven influencer prediction on a single platform with no content understanding. TrustRank-Inf uses GNN for trust propagation on a cross-platform collaboration graph, fused with multimodal content embeddings — a fundamentally different objective and architecture."
+  },
+  {
+    id:"P2", cat:"GNN",
+    title:"GNN-IR: GNNs for Influencer Recommendations",
+    meta:"Park et al. — Journal of Retailing & Consumer Services, Elsevier, 2024",
+    scores:["partial","partial","no","no","no","no"],
+    learn:"Bipartite GNNs linking advertisers to influencers via PyTorch Geometric achieve 96.51% Precision@k. Incorporating image, text, and metadata features jointly improves recommendation quality.",
+    diff:"GNN-IR operates only on YouTube and focuses on advertiser-influencer matching, not trust scoring. It has no anomaly detection, no FAISS retrieval, and no cross-platform support. TrustRank-Inf extends this with trust propagation, unsupervised fraud filtering, and a unified re-ranking layer."
+  },
+  {
+    id:"P3", cat:"GNN",
+    title:"Inductive Representation Learning on Large Graphs (GraphSAGE)",
+    meta:"Hamilton, Ying, Leskovec — NeurIPS, 2017",
+    scores:["yes","no","no","no","no","no"],
+    learn:"GraphSAGE's inductive design generates embeddings for unseen nodes without retraining — critical for weekly-updated graphs. Neighborhood sampling + aggregation gives 51% F1 improvement over transductive baselines.",
+    diff:"GraphSAGE is a general-purpose GNN framework, not an influencer system. TrustRank-Inf applies GraphSAGE specifically for trust score propagation on a creator collaboration graph, combining its output with CLIP embeddings and anomaly scores in a unified re-ranking pipeline."
+  },
+  {
+    id:"P4", cat:"Multimodal",
+    title:"Learning Transferable Visual Models From Natural Language (CLIP)",
+    meta:"Radford et al. — ICML, 2021",
+    scores:["no","yes","no","no","no","no"],
+    learn:"Contrastive pretraining on 400M image-text pairs creates a joint visual-semantic embedding space where similar concepts cluster regardless of modality. Zero-shot generalisation beats supervised baselines on 16/27 benchmarks.",
+    diff:"CLIP is a general-purpose vision-language encoder. TrustRank-Inf uses CLIP encoders specifically to embed influencer thumbnails and captions into a shared space, enabling brand-content semantic matching — an application CLIP was not designed or evaluated for."
+  },
+  {
+    id:"P5", cat:"Retrieval",
+    title:"The Faiss Library",
+    meta:"Douze, Guzhva et al. — Meta FAIR, arXiv, 2024",
+    scores:["no","no","no","yes","no","no"],
+    learn:"FAISS supports IVF, HNSW, and product quantization for billion-scale ANN search. The choice of index type governs the accuracy-speed tradeoff — IVFFlat is sufficient for datasets under 1M vectors.",
+    diff:"FAISS is infrastructure, not a recommender system. TrustRank-Inf uses FAISS as the retrieval backbone for joint embeddings enhanced with GNN trust scores — a novel combination of vector similarity and graph-derived credibility signals not present in any FAISS usage documented in their paper."
+  },
+  {
+    id:"P6", cat:"Anomaly",
+    title:"Fake Twitter Followers Detection by Denoising Autoencoder",
+    meta:"Castellini, Poggioni, Sorbi — ACM WebIntelligence, 2017",
+    scores:["no","no","yes","no","no","no"],
+    learn:"Denoising autoencoders trained on legitimate account distributions flag fakes via high reconstruction error — no labelled fraud data required. Establishes semi-supervised anomaly detection as a viable paradigm for social media fraud.",
+    diff:"Castellini et al. apply autoencoders to static profile metadata on Twitter only. TrustRank-Inf applies an autoencoder to engagement time-series features (likes/views ratio, comment velocity, follower growth curves) on both YouTube and Instagram, and integrates the anomaly score into a downstream re-ranking fusion layer."
+  },
+  {
+    id:"P7", cat:"Anomaly",
+    title:"Unsupervised Detection of Coordinated Fake-Follower Campaigns",
+    meta:"Zouzou, Varol — EPJ Data Science, Springer, 2024",
+    scores:["no","no","yes","no","no","no"],
+    learn:"Sliding Histogram and Isolation Forest on follower-rank and account-creation time patterns detect coordinated fake-follower campaigns without engineered features. Validates fully unsupervised fraud detection as production-viable.",
+    diff:"This paper targets coordinated campaign-level detection on Twitter alone. TrustRank-Inf applies unsupervised anomaly detection at the individual account level using engagement metrics, across two platforms, and uniquely fuses the fraud signal into a multi-signal re-ranking score rather than using it as a binary filter."
+  },
+  {
+    id:"P8", cat:"GNN",
+    title:"A Survey of GNNs for Social Recommender Systems",
+    meta:"Sharma, Lee et al. — ACM Computing Surveys, 2024",
+    scores:["partial","no","no","no","no","no"],
+    learn:"Attention-based GNN encoders consistently outperform mean-aggregation GNNs for social recommendation by filtering noisy neighbor signals. Social homophily and influence propagation are the two dominant modelling paradigms.",
+    diff:"This is a survey, not an implemented system. It covers no multimodal content understanding, no anomaly detection, and no cross-platform design. TrustRank-Inf implements a concrete instantiation of attention-based GNN trust propagation that this survey's taxonomy would categorise as a novel combination of homophily-based scoring with content-aware re-ranking."
+  },
+  {
+    id:"P9", cat:"Multimodal",
+    title:"A Comprehensive Survey on Multimodal Recommender Systems",
+    meta:"Zhou, Zhou et al. — arXiv:2302.04473, 2023",
+    scores:["no","yes","no","no","no","no"],
+    learn:"Joint embedding spaces outperform late-fusion approaches for multimodal recommendation. Modality features can construct latent item structures beyond user-item bipartite graphs, enabling richer semantic retrieval.",
+    diff:"This is a survey of multimodal recommenders for general e-commerce and video platforms — not influencer discovery. No trust scoring, no graph-based credibility, no fraud detection. TrustRank-Inf is the first system to apply joint visual-semantic embeddings specifically for influencer-brand content alignment across YouTube and Instagram."
+  },
+  {
+    id:"P10", cat:"GNN",
+    title:"Exploring Instagram Influencer Networks: A Graph-Based ML Approach",
+    meta:"IIETA — Ingénierie des Systèmes d'Information, 2024",
+    scores:["no","no","no","no","no","no"],
+    learn:"Modeling Instagram as a graph with Node2Vec and Word2Vec reveals community structures and niche clusters invisible to follower-count ranking. Graph topology alone carries significant predictive signal for influencer discovery.",
+    diff:"This paper uses static random-walk graph embeddings (Node2Vec) on Instagram only, with no content modality, no trust scoring, and no fraud detection. TrustRank-Inf replaces Node2Vec with a learned GNN, adds CLIP-based content embeddings, and operates across both Instagram and YouTube simultaneously."
+  },
+  {
+    id:"P11", cat:"Multimodal",
+    title:"ID Embedding as Subtle Features of Content and Structure for Multimodal Recommendation",
+    meta:"Li, Li — arXiv:2311.05956, 2023",
+    scores:["no","yes","no","no","no","no"],
+    learn:"Combining graph-structural ID embeddings with content modality embeddings outperforms either alone on Recall@20 and NDCG@20. The fusion approach generalises across recommendation domains.",
+    diff:"Li & Li fuse content and structure for general product recommendation, not influencer discovery. Their work has no anomaly detection, no trust propagation, and no cross-platform scope. TrustRank-Inf adapts this content-structure fusion idea specifically to combine CLIP embeddings with GNN-derived trust scores in the re-ranking layer."
+  },
+  {
+    id:"P12", cat:"GNN",
+    title:"Graph Neural Networks: A Review of Methods and Applications",
+    meta:"Zhou, Cui et al. — AI Open, Elsevier, 2020",
+    scores:["no","no","no","no","no","no"],
+    learn:"Formal definitions of GCN, GAT, and GraphSAGE. GAT's attention mechanism allows selective neighbour weighting — key for noisy social graphs where not all neighbours are equally informative.",
+    diff:"A foundational survey with no application-level contribution. Provides the formal theoretical grounding for the GNN component of TrustRank-Inf. Cited in the background section to define terminology, not as a competing system."
+  },
+  {
+    id:"P13", cat:"Evaluation",
+    title:"Assessing Ranking Metrics in Top-N Recommendation",
+    meta:"Bellogín et al. — Discover Computing, Springer, 2020",
+    scores:["no","no","no","no","no","no"],
+    learn:"NDCG has the best discriminative power for offline ranking evaluation, outperforming Precision, Recall, and MAP. Establishes NDCG as the gold standard for top-N ranked recommender evaluation.",
+    diff:"A metrics analysis paper, not an implemented system. TrustRank-Inf directly applies NDCG as its primary evaluation metric, justified by this paper's findings. Cited in the evaluation section to defend the choice of NDCG over simpler precision-based metrics."
+  },
+  {
+    id:"P14", cat:"Context",
+    title:"Leveraging ML to Analyze Influencer Credibility's Impact on Brand Admiration",
+    meta:"Zaki et al. — Human Behavior & Emerging Technologies, Wiley, 2025",
+    scores:["no","no","no","no","no","no"],
+    learn:"ML models confirm that influencer credibility (trustworthiness, expertise, attractiveness) directly drives brand admiration and purchase intent. Credibility is measurable and predictive — not just subjective.",
+    diff:"This paper measures credibility impact using survey data and ML classifiers — it does not build a discovery or recommendation system. TrustRank-Inf operationalises credibility scoring as a computational signal (GNN trust propagation + anomaly detection) rather than a post-hoc survey measurement."
+  },
+  {
+    id:"P15", cat:"Context",
+    title:"Influencer Marketing Effectiveness: A Meta-Analytic Review",
+    meta:"Pan, Blut et al. — Journal of the Academy of Marketing Science, 2025",
+    scores:["no","no","no","no","no","no"],
+    learn:"Meta-analysis of 71 studies confirms influencer credibility and authenticity as the primary drivers of consumer engagement — more effective than brand posts, virtual influencers, and celebrities.",
+    diff:"A marketing science meta-analysis, not an AI system. Provides the business motivation and real-world stakes for TrustRank-Inf. Cited in the introduction and abstract to justify why a system that quantifies trust and authenticity is commercially and academically significant."
+  }
+];
+
+const ours = ["yes","yes","yes","yes","yes","yes"];
+
+function pill(val){
+  const cls = val==="yes"?"pill-yes":val==="partial"?"pill-partial":val==="novel"?"pill-novel":"pill-no";
+  const label = val==="yes"?"covered":val==="partial"?"partial":val==="novel"?"novel":"absent";
+  return `<span class="pill ${cls}">${label}</span>`;
+}
+
+function ourPill(){return `<span class="pill pill-novel">ours</span>`;}
+
+let selected = null;
+let activeFilter = "all";
+
+function render(){
+  const tbody = document.getElementById("tbody");
+  tbody.innerHTML = "";
+  papers.forEach((p,i)=>{
+    const show = activeFilter==="all"||p.cat===activeFilter;
+    const tr = document.createElement("tr");
+    tr.className = selected===i?"selected":"";
+    if(!show) tr.classList.add("dim");
+    tr.onclick = ()=>selectRow(i);
+    let cells = `<td class="pid">${p.id}</td><td class="title">${p.title.length>55?p.title.slice(0,52)+"…":p.title}</td>`;
+    p.scores.forEach(s=>{ cells+=`<td style="text-align:center">${pill(s)}</td>`; });
+    tr.innerHTML = cells;
+    tbody.appendChild(tr);
+  });
+  const ourRow = document.createElement("tr");
+  ourRow.style.cssText = "background:var(--color-background-info);font-weight:500";
+  let ourCells = `<td class="pid" style="color:var(--color-text-info)">Ours</td><td class="title" style="color:var(--color-text-info)">TrustRank-Inf (this paper)</td>`;
+  ours.forEach(()=>{ ourCells+=`<td style="text-align:center">${ourPill()}</td>`; });
+  ourRow.innerHTML = ourCells;
+  tbody.appendChild(ourRow);
+}
+
+function selectRow(i){
+  selected = selected===i?null:i;
+  render();
+  const detail = document.getElementById("detail");
+  if(selected===null){detail.classList.remove("show");return;}
+  const p = papers[i];
+  document.getElementById("d-title").textContent = p.title;
+  document.getElementById("d-meta").textContent = p.meta;
+  document.getElementById("d-learn").textContent = p.learn;
+  document.getElementById("d-diff").textContent = p.diff;
+  const pillsDiv = document.getElementById("d-pills");
+  pillsDiv.innerHTML = DIMS.map((d,j)=>`<span style="font-size:11px;color:var(--color-text-secondary);margin-right:2px">${d}:</span>${pill(p.scores[j])}`).join('<span style="margin:0 6px;color:var(--color-border-secondary)">|</span>');
+  detail.classList.add("show");
+  detail.scrollIntoView({behavior:"smooth",block:"nearest"});
+}
+
+function closeDetail(){selected=null;render();document.getElementById("detail").classList.remove("show");}
+
+document.getElementById("filters").querySelectorAll(".fbtn").forEach(btn=>{
+  btn.onclick=()=>{
+    activeFilter=btn.dataset.cat;
+    document.querySelectorAll(".fbtn").forEach(b=>b.classList.remove("active"));
+    btn.classList.add("active");
+    selected=null;
+    document.getElementById("detail").classList.remove("show");
+    render();
+  };
+});
+
+render();
+</script>
