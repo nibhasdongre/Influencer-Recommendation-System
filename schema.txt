@@ -12,11 +12,11 @@ post_id, type, media_URL, thumbnail_URL, caption, audio_path
 YouTube Dataset
 
 Creators
-channel_ID, channelTitle, publishedAt, thumbnailURL, language, country, subscriberCount, videoCount
+Channel ID, Channel Title, Published At, Thumbnail URL, Language, Country, Subscriber Count, Video Count
 Videos
 video_id, channel_id, title, description, tags, language
 Metrics
 video_id, collected_at, views, likes, comment_count
 Assets
-video_id, thumbnail_URL, description, audio_path
+video_id, thumbnail_url
 
