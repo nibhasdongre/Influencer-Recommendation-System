@@ -1,8 +1,8 @@
 Instagram Dataset
 Creators
-account_id	username	bio	followers	posts	verified
+account_id, username, bio, followers, posts, verified
 Posts
-post_id, account_id, type, hashtags
+post_id, account_id, type, hashtags,domain
 Metrics
 post_id, likes, views, comments, timestamp, shares
 Assets
@@ -14,7 +14,7 @@ YouTube Dataset
 Creators
 Channel ID, Channel Title, Published At, Thumbnail URL, Language, Country, Subscriber Count, Video Count
 Videos
-video_id, channel_id, title, description, tags, language
+video_id, channel_id, title, description, tags, language, domain
 Metrics
 video_id, collected_at, views, likes, comment_count
 Assets
