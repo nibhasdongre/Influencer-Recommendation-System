@@ -6,7 +6,7 @@ post_id, account_id, type, hashtags
 Metrics
 post_id, likes, views, comments, timestamp, shares
 Assets
-post_id, type, media_URL, thumbnail_URL, caption, audio_path
+post_id, type, media_URL, caption
 
 
 YouTube Dataset
