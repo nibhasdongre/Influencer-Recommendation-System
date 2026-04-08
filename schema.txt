@@ -1,6 +1,6 @@
 Instagram Dataset
 Creators
-account_id, username, bio, followers, posts, verified
+account_id	username	bio	followers	posts	verified
 Posts
 post_id, account_id, type, hashtags
 Metrics
