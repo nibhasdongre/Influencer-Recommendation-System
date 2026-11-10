@@ -1,0 +1,272 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <meta name="description" content="A cross-platform influencer discovery and recommendation research prototype combining multimodal semantic retrieval, graph-based trust modelling and anomaly-aware ranking." />
+  <title>Influencer Recommendation System — Research Project</title>
+  <style>
+    :root {
+      --bg: #0b1020;
+      --surface: #111a2e;
+      --surface-2: #17233a;
+      --line: rgba(190, 207, 236, .14);
+      --text: #eef3ff;
+      --muted: #aab7ce;
+      --soft: #74839e;
+      --accent: #9be7d1;
+      --accent-2: #b9b2ff;
+      --gold: #f4cf87;
+      --pink: #f0a9c5;
+      --radius: 22px;
+      --max: 1120px;
+    }
+    * { box-sizing: border-box; }
+    html { scroll-behavior: smooth; }
+    body {
+      margin: 0;
+      background: radial-gradient(ellipse at 75% 0%, rgba(114, 105, 210, .17), transparent 36%), var(--bg);
+      color: var(--text);
+      font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+      line-height: 1.6;
+    }
+    a { color: inherit; text-decoration: none; }
+    .wrap { width: min(var(--max), calc(100% - 40px)); margin: 0 auto; }
+    .nav { display: flex; justify-content: space-between; align-items: center; padding: 24px 0; border-bottom: 1px solid var(--line); }
+    .brand { display: flex; gap: 11px; align-items: center; font-weight: 750; letter-spacing: -.03em; }
+    .brand-mark { display: grid; place-items: center; width: 34px; height: 34px; border-radius: 11px; color: #09121d; background: var(--accent); font-weight: 900; }
+    .nav-links { display: flex; gap: 25px; color: var(--muted); font-size: .9rem; }
+    .nav-links a:hover, .text-link:hover { color: var(--accent); }
+    .eyebrow { display: inline-flex; align-items: center; gap: 9px; color: var(--accent); font-size: .76rem; font-weight: 750; text-transform: uppercase; letter-spacing: .14em; }
+    .eyebrow::before { content: ""; width: 22px; height: 1px; background: currentColor; }
+    .hero { padding: 88px 0 68px; display: grid; grid-template-columns: 1.25fr .75fr; gap: 54px; align-items: center; }
+    h1 { margin: 17px 0 20px; max-width: 760px; font-size: clamp(2.7rem, 6vw, 5.2rem); line-height: .99; letter-spacing: -.065em; }
+    h1 span { color: var(--accent); }
+    .lead { max-width: 700px; color: var(--muted); font-size: 1.12rem; line-height: 1.8; }
+    .hero-actions { display: flex; gap: 12px; flex-wrap: wrap; margin-top: 30px; }
+    .btn { padding: 11px 17px; border-radius: 999px; font-size: .9rem; font-weight: 700; border: 1px solid var(--line); }
+    .btn-primary { color: #07131b; background: var(--accent); border-color: var(--accent); }
+    .btn-secondary { color: var(--text); background: rgba(255,255,255,.025); }
+    .hero-card { padding: 25px; border: 1px solid var(--line); border-radius: 26px; background: linear-gradient(145deg, rgba(185,178,255,.12), rgba(155,231,209,.05)); box-shadow: 0 25px 80px rgba(0,0,0,.2); }
+    .card-kicker { color: var(--soft); font-size: .75rem; text-transform: uppercase; letter-spacing: .13em; font-weight: 700; }
+    .query { margin: 12px 0 20px; font-size: 1.3rem; line-height: 1.35; font-weight: 650; }
+    .query em { color: var(--accent); font-style: normal; }
+    .mini-result { display: flex; justify-content: space-between; gap: 14px; padding: 13px 0; border-top: 1px solid var(--line); font-size: .88rem; }
+    .mini-result span:last-child { color: var(--accent); font-variant-numeric: tabular-nums; }
+    .prototype-note { margin-top: 20px; padding: 13px 15px; border-radius: 13px; border: 1px solid rgba(244,207,135,.3); background: rgba(244,207,135,.07); color: #f5dfb5; font-size: .82rem; }
+    .metrics { display: grid; grid-template-columns: repeat(4, 1fr); gap: 13px; margin: 5px 0 80px; }
+    .metric { padding: 21px; border: 1px solid var(--line); border-radius: 18px; background: rgba(255,255,255,.025); }
+    .metric strong { display: block; font-size: clamp(1.7rem, 3vw, 2.3rem); letter-spacing: -.05em; line-height: 1.2; }
+    .metric span { display: block; margin-top: 8px; color: var(--muted); font-size: .82rem; }
+    section { padding: 64px 0; border-top: 1px solid var(--line); }
+    .section-head { max-width: 720px; margin-bottom: 32px; }
+    h2 { margin: 10px 0 12px; font-size: clamp(1.9rem, 4vw, 3rem); line-height: 1.08; letter-spacing: -.05em; }
+    .section-intro { color: var(--muted); margin: 0; }
+    .two-col { display: grid; grid-template-columns: 1fr 1fr; gap: 24px; }
+    .panel { padding: 25px; border: 1px solid var(--line); border-radius: var(--radius); background: var(--surface); }
+    .panel h3 { margin: 0 0 10px; font-size: 1.1rem; }
+    .panel p { margin: 0; color: var(--muted); }
+    .problem-list { margin: 18px 0 0; padding: 0; list-style: none; }
+    .problem-list li { padding: 10px 0; border-top: 1px solid var(--line); color: var(--muted); }
+    .problem-list b { color: var(--text); }
+    .pipeline { display: grid; grid-template-columns: repeat(5, 1fr); gap: 10px; counter-reset: stage; }
+    .stage { position: relative; min-height: 175px; padding: 18px; border: 1px solid var(--line); border-radius: 17px; background: var(--surface); }
+    .stage::before { counter-increment: stage; content: "0" counter(stage); display: block; margin-bottom: 22px; color: var(--accent); font-size: .75rem; font-weight: 800; letter-spacing: .1em; }
+    .stage h3 { margin: 0 0 8px; font-size: .98rem; }
+    .stage p { margin: 0; color: var(--muted); font-size: .82rem; }
+    .stage small { display: block; margin-top: 12px; color: var(--soft); font-size: .72rem; }
+    .results-grid { display: grid; grid-template-columns: 1.1fr .9fr; gap: 20px; align-items: stretch; }
+    .chart-panel { padding: 25px; border: 1px solid var(--line); border-radius: var(--radius); background: var(--surface); }
+    .chart-panel h3 { margin: 0 0 6px; }
+    .chart-panel .sub { margin: 0 0 22px; color: var(--soft); font-size: .82rem; }
+    .bar-row { display: grid; grid-template-columns: 145px 1fr 55px; gap: 12px; align-items: center; margin: 17px 0; font-size: .82rem; }
+    .bar-label { color: var(--muted); }
+    .bar-track { height: 11px; border-radius: 99px; background: #25334c; overflow: hidden; }
+    .bar { height: 100%; border-radius: inherit; background: var(--accent-2); }
+    .bar.proposed { background: var(--accent); }
+    .bar-value { text-align: right; color: var(--text); font-variant-numeric: tabular-nums; }
+    .metric-stack { display: grid; gap: 12px; }
+    .result-tile { padding: 19px; border: 1px solid var(--line); border-radius: 17px; background: var(--surface); }
+    .result-tile strong { display: block; font-size: 1.8rem; line-height: 1.2; letter-spacing: -.04em; }
+    .result-tile span { display: block; margin-top: 5px; color: var(--muted); font-size: .83rem; }
+    .caveat { margin-top: 17px; color: var(--soft); font-size: .78rem; }
+    .contrib { display: grid; grid-template-columns: 1fr 1fr; gap: 15px; }
+    .contrib-item { padding: 21px; border: 1px solid var(--line); border-radius: 17px; background: var(--surface); }
+    .contrib-item .tag { color: var(--accent); font-size: .72rem; text-transform: uppercase; letter-spacing: .12em; font-weight: 750; }
+    .contrib-item h3 { margin: 8px 0; font-size: 1rem; }
+    .contrib-item p { margin: 0; color: var(--muted); font-size: .88rem; }
+    .stack { display: flex; flex-wrap: wrap; gap: 9px; }
+    .chip { padding: 8px 12px; border: 1px solid var(--line); border-radius: 999px; color: var(--muted); background: rgba(255,255,255,.025); font-size: .82rem; }
+    .status { display: grid; grid-template-columns: 1fr auto; align-items: center; gap: 20px; padding: 25px; border: 1px solid rgba(155,231,209,.25); border-radius: var(--radius); background: linear-gradient(120deg, rgba(155,231,209,.09), rgba(185,178,255,.07)); }
+    .status h3 { margin: 0 0 7px; }
+    .status p { margin: 0; color: var(--muted); }
+    .status-pill { white-space: nowrap; padding: 8px 12px; border-radius: 99px; color: var(--accent); background: rgba(155,231,209,.1); font-size: .76rem; font-weight: 750; }
+    footer { padding: 30px 0 45px; color: var(--soft); font-size: .82rem; display: flex; justify-content: space-between; gap: 15px; }
+    .text-link { color: var(--accent); }
+    @media (max-width: 850px) {
+      .hero { grid-template-columns: 1fr; padding-top: 65px; }
+      .metrics { grid-template-columns: repeat(2, 1fr); }
+      .pipeline { grid-template-columns: repeat(2, 1fr); }
+      .results-grid { grid-template-columns: 1fr; }
+    }
+    @media (max-width: 580px) {
+      .wrap { width: min(100% - 28px, var(--max)); }
+      .nav-links { display: none; }
+      .hero { padding: 52px 0 45px; gap: 30px; }
+      .metrics { gap: 9px; margin-bottom: 55px; }
+      .metric { padding: 15px; }
+      .two-col, .contrib { grid-template-columns: 1fr; }
+      section { padding: 48px 0; }
+      .pipeline { grid-template-columns: 1fr 1fr; }
+      .stage { min-height: 160px; padding: 14px; }
+      .bar-row { grid-template-columns: 105px 1fr 45px; gap: 8px; font-size: .75rem; }
+      .status { grid-template-columns: 1fr; }
+      .status-pill { justify-self: start; }
+      footer { flex-direction: column; }
+    }
+  </style>
+</head>
+<body>
+  <header class="wrap nav">
+    <a class="brand" href="#top" aria-label="CreatorLens home"><span class="brand-mark">C</span><span>Influencer Discovery <span style="color:var(--soft);font-weight:500">/ Research Project</span></span></a>
+    <nav class="nav-links" aria-label="Main navigation">
+      <a href="#overview">Overview</a><a href="#pipeline">Pipeline</a><a href="#results">Results</a><a href="#about">My contribution</a>
+    </nav>
+  </header>
+
+  <main id="top" class="wrap">
+    <div class="hero">
+      <div>
+        <div class="eyebrow">Multimodal retrieval · Graph learning · Trust-aware ranking</div>
+        <h1>Find creators who fit the <span>brand</span>, not just the numbers.</h1>
+        <p class="lead">A cross-platform influencer discovery research prototype that combines semantic content matching, graph-based trust signals and engagement anomaly detection to rank relevant creators across YouTube and Instagram.</p>
+        <div class="hero-actions">
+          <a class="btn btn-primary" href="#results">Explore evaluation results ↓</a>
+          <a class="btn btn-secondary" href="#pipeline">See how it works</a>
+        </div>
+      </div>
+      <aside class="hero-card" aria-label="Illustrative brand query and system signals">
+        <div class="card-kicker">Example brand brief</div>
+        <div class="query">“Find creators for a <em>fitness</em> campaign with authentic engagement.”</div>
+        <div class="mini-result"><span>Semantic content match</span><span>CLIP</span></div>
+        <div class="mini-result"><span>Creator relationship signals</span><span>GraphSAGE</span></div>
+        <div class="mini-result"><span>Engagement irregularities</span><span>Autoencoder</span></div>
+        <div class="mini-result"><span>Candidate retrieval</span><span>FAISS</span></div>
+        <div class="prototype-note">Illustrative workflow only — this page does not run a live search or display live creator recommendations.</div>
+      </aside>
+    </div>
+
+    <div class="metrics" aria-label="Project dataset summary">
+      <div class="metric"><strong>2,960</strong><span>creator profiles indexed</span></div>
+      <div class="metric"><strong>2</strong><span>platforms · YouTube and Instagram</span></div>
+      <div class="metric"><strong>1,024-D</strong><span>joint text + image representation</span></div>
+      <div class="metric"><strong>15</strong><span>evaluation queries in the benchmark</span></div>
+    </div>
+
+    <section id="overview">
+      <div class="section-head">
+        <div class="eyebrow">The problem</div>
+        <h2>Popularity is not the same as relevance or credibility.</h2>
+        <p class="section-intro">Follower-count and keyword-based discovery can miss whether a creator's content actually fits a campaign — and whether engagement signals look reliable. This project explores a ranking approach that considers multiple signals together.</p>
+      </div>
+      <div class="two-col">
+        <article class="panel">
+          <h3>What the system aims to do</h3>
+          <p>Given a brand brief (and optionally a reference image), retrieve creators whose content is semantically aligned with the campaign, then refine the candidate ranking using trust and engagement-anomaly signals.</p>
+          <ul class="problem-list">
+            <li><b>Relevance:</b> understand creator text and visual content.</li>
+            <li><b>Trust:</b> use creator-graph relationships and verification signals.</li>
+            <li><b>Risk:</b> flag unusual engagement patterns for ranking/filtering.</li>
+          </ul>
+        </article>
+        <article class="panel">
+          <h3>Dataset snapshot</h3>
+          <p>The implemented research dataset contains creator profiles collected from two social platforms and a labelled verification subset used by the graph model.</p>
+          <ul class="problem-list">
+            <li><b>2,960</b> creator profiles across YouTube and Instagram.</li>
+            <li><b>99</b> verified creator accounts in the graph dataset.</li>
+            <li><b>~59,450</b> bidirectional graph edges across four relationship types.</li>
+            <li><b>450</b> query–creator pairs in the custom evaluation benchmark.</li>
+          </ul>
+        </article>
+      </div>
+    </section>
+
+    <section id="pipeline">
+      <div class="section-head">
+        <div class="eyebrow">System pipeline</div>
+        <h2>Three signals. One ranked shortlist.</h2>
+        <p class="section-intro">The pipeline is retrieval-first: semantic similarity finds relevant candidates; trust and anomaly signals then help refine the shortlist.</p>
+      </div>
+      <div class="pipeline">
+        <article class="stage"><h3>Collect & prepare</h3><p>Gather creator, post/video, metric and thumbnail data; clean and join platform records.</p><small>YouTube Data API · Apify · Pandas</small></article>
+        <article class="stage"><h3>Encode content</h3><p>Encode creator text and images separately, normalise each modality and combine them.</p><small>CLIP ViT-B/32 · 1,024 dimensions</small></article>
+        <article class="stage"><h3>Learn trust & risk</h3><p>Build a multi-relational creator graph and train platform-specific engagement autoencoders.</p><small>GraphSAGE · PyTorch autoencoders</small></article>
+        <article class="stage"><h3>Retrieve candidates</h3><p>Search the creator embedding index using text or text-plus-image campaign queries.</p><small>FAISS · IndexFlatIP</small></article>
+        <article class="stage"><h3>Re-rank results</h3><p>Apply domain-aware ranking with trust signals and anomaly penalties to produce a shortlist.</p><small>Multi-signal re-ranking · NDCG evaluation</small></article>
+      </div>
+    </section>
+
+    <section id="results">
+      <div class="section-head">
+        <div class="eyebrow">Evaluation snapshot</div>
+        <h2>Measured against simpler retrieval baselines.</h2>
+        <p class="section-intro">The proposed configuration combines CLIP-based retrieval with domain-aware anomaly filtering and trust-aware re-ranking. The values below are from the project's stricter V2 relevance annotation.</p>
+      </div>
+      <div class="results-grid">
+        <div class="chart-panel">
+          <h3>Aggregate NDCG@10</h3>
+          <p class="sub">Higher is better · V2 evaluation configuration</p>
+          <div class="bar-row"><span class="bar-label">Follower baseline</span><div class="bar-track"><div class="bar" style="width:32.2%"></div></div><span class="bar-value">0.104</span></div>
+          <div class="bar-row"><span class="bar-label">CLIP text-only</span><div class="bar-track"><div class="bar" style="width:9.1%"></div></div><span class="bar-value">0.0295</span></div>
+          <div class="bar-row"><span class="bar-label">Proposed system</span><div class="bar-track"><div class="bar proposed" style="width:100%"></div></div><span class="bar-value">0.323</span></div>
+          <p class="caveat">NDCG@10 measures ranking quality in the top 10 results against the benchmark's graded relevance labels. Baseline values are shown as reported in the project evaluation.</p>
+        </div>
+        <div class="metric-stack">
+          <div class="result-tile"><strong>0.887</strong><span>GraphSAGE verification ROC-AUC reported for the trust model.</span></div>
+          <div class="result-tile"><strong>0.755 vs 0.439</strong><span>Mean learned trust signal for verified vs. unverified creators in the evaluated graph.</span></div>
+          <div class="result-tile"><strong>0.6233</strong><span>Best reported domain-level NDCG@10 for Fitness under the V2 evaluation.</span></div>
+          <div class="result-tile"><strong>&lt; 1 second</strong><span>Reported query latency at the current 2,960-creator dataset scale.</span></div>
+        </div>
+      </div>
+      <p class="caveat">Evaluation context: custom benchmark of 15 queries and 450 query–creator relevance pairs. These are research-prototype results, not a production-scale or independently replicated benchmark. The report contains other evaluation configurations and intermediate scores; this page labels the selected V2 aggregate comparison explicitly.</p>
+    </section>
+
+    <section id="about">
+      <div class="section-head">
+        <div class="eyebrow">My contribution</div>
+        <h2>Data pipelines, graph learning and anomaly detection.</h2>
+        <p class="section-intro">The project was developed as a team effort. My primary contributions focused on data engineering and the graph-learning / anomaly-detection components.</p>
+      </div>
+      <div class="contrib">
+        <article class="contrib-item"><div class="tag">Data engineering</div><h3>Cross-platform data pipeline</h3><p>Built the collection and preprocessing workflow using the YouTube Data API and Apify Instagram data, with local persistence, scheduling and creator-level feature preparation.</p></article>
+        <article class="contrib-item"><div class="tag">Graph machine learning</div><h3>GraphSAGE trust modelling</h3><p>Developed the creator graph and GraphSAGE-based trust model, using relationship signals and verification labels to derive creator trust scores.</p></article>
+        <article class="contrib-item"><div class="tag">Anomaly detection</div><h3>Engagement anomaly models</h3><p>Engineered engagement features and implemented separate PyTorch autoencoders for YouTube and Instagram to identify unusual engagement patterns.</p></article>
+        <article class="contrib-item"><div class="tag">Team integration</div><h3>End-to-end recommendation pipeline</h3><p>Worked with the team integrating the data, trust and anomaly outputs into a multimodal retrieval and re-ranking system evaluated against ranking baselines.</p></article>
+      </div>
+    </section>
+
+    <section>
+      <div class="section-head">
+        <div class="eyebrow">Technology</div>
+        <h2>Built with a practical ML and retrieval stack.</h2>
+      </div>
+      <div class="stack">
+        <span class="chip">Python</span><span class="chip">Pandas</span><span class="chip">NumPy</span><span class="chip">PyTorch</span><span class="chip">PyTorch Geometric</span><span class="chip">CLIP ViT-B/32</span><span class="chip">GraphSAGE</span><span class="chip">FAISS</span><span class="chip">Autoencoders</span><span class="chip">FastAPI</span><span class="chip">SQLite</span><span class="chip">YouTube Data API</span><span class="chip">Apify</span><span class="chip">Scikit-learn</span>
+      </div>
+    </section>
+
+    <section>
+      <div class="status">
+        <div><h3>Research prototype · UI in progress</h3><p>The recommendation pipeline and offline evaluation are documented here. An interactive search interface and live creator-result explorer are not currently available.</p></div>
+        <div class="status-pill">Showcase page · Not a live demo</div>
+      </div>
+    </section>
+  </main>
+
+  <footer class="wrap">
+    <span>Influencer Recommendation System · Research Project</span>
+    <span>Research prototype · Project evaluation summary</span>
+  </footer>
+</body>
+</html>
